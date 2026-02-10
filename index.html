@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Cœur de particules simple❤️</title>
+        <style>
+            :root {
+                --background-color: #000000;
+                --heart-particle-color-hue-min: 345;
+                --heart-particle-color-hue-range: 10;
+                --heart-particle-color-lightness: 70%;
+                --text-particle-color-hue-min: 350;
+                --text-particle-color-hue-range: 20;
+                --text-particle-color-lightness: 90%;
+                --signature-color-hue: 200;
+                --signature-color-lightness: 75%;
+            }
+
+            body {
+                margin: 0;
+                overflow: hidden;
+                background-color: var(--background-color);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                font-family: Arial, sans-serif;
+            }
+            
+            canvas {
+                display: block;
+                width: 100%;
+                height: 100%;
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
+
+            #backgroundCanvas {
+                z-index: 1;
+            }
+
+            #heartCanvas {
+                z-index: 2;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="backgroundCanvas"></canvas>
+        <canvas id="heartCanvas"></canvas>
+
+        <script>
+            const config = {
+                heart: {
+                    particleCount: 800, 
+                    scaleFactorMobile: 0.30,
+                    scaleFactorTablet: 0.28,
+                    scaleFactorDesktop: 0.25,
+                    particleSizeMin: 1.5,
+                    particleSizeRange: 2.5,
+                    trembleAmplitude: 3,
+                    orbitRadius: 3,
+                    orbitSpeedMin: 0.03,
+                    orbitSpeedRange: 0.05,
+                    densityMin: 1,
+                    densityRange: 20
+                },
+                text: {
+                    particleCount: 150, 
+                    fontSizeMobile: 0.06,
+                    fontSizeTablet: 0.055,
+                    fontSizeDesktop: 0.05,
+                    lineHeightMobile: 0.075,
+                    lineHeightTablet: 0.07,
+                    lineHeightDesktop: 0.065,
+                    particleSizeMin: 0.8,
+                    particleSizeRange: 1.2,
+                    trembleAmplitude: 2,
+                    orbitRadius: 2,
+                    orbitSpeedMin: 0.03,
+                    orbitSpeedRange: 0.05,
+                    pixelStepMobile: 1.0, 
+                    pixelStepTablet: 1.3,
+                    pixelStepDesktop: 1.6,
+                    densityMin: 1,
+                    densityRange: 20
+                },
+                signature: {
+                    fontSizeMobile: 0.035,
+                    fontSizeTablet: 0.03,
+                    fontSizeDesktop: 0.025,
+                    particleSizeMin: 0.6,
+                    particleSizeRange: 1.0,
+                    trembleAmplitude: 1.5,
+                    orbitRadius: 1.5,
+                    orbitSpeedMin: 0.02,
+                    orbitSpeedRange: 0.04,
+                    pixelStepMobile: 1.0,
+                    pixelStepTablet: 1.2,
+                    pixelStepDesktop: 1.4,
+                    densityMin: 1,
+                    densityRange: 15,
+                    bottomOffsetMobile: 0.08,
+                    bottomOffsetTablet: 0.07,
+                    bottomOffsetDesktop: 0.06
+                },
+                mouse: {
+                    radius: 200
+                },
+                background: {
+                    waveSpeed: 0.001, 
+                    waveAmplitude: 0.4, 
+                    secondaryWaveSpeed: 0.0008, 
+                    secondaryWaveAmplitude: 0.3,
+                    redIntensity: 0.3
+                }
+            };
+
+            const backgroundCanvas = document.getElementById('backgroundCanvas');
+            const heartCanvas = document.getElementById('heartCanvas');
+            const bgCtx = backgroundCanvas.getContext('2d');
+            const ctx = heartCanvas.getContext('2d');
+            
+            function getDeviceType() {
+                const width = window.innerWidth;
+                if (width <= 480) return 'mobile';
+                if (width <= 1024) return 'tablet';
+                return 'desktop';
+            }
+
+            function resizeCanvas() {
+                backgroundCanvas.width = window.innerWidth;
+                backgroundCanvas.height = window.innerHeight;
+                heartCanvas.width = window.innerWidth;
+                heartCanvas.height = window.innerHeight;
+            }
+            resizeCanvas();
+            
+            const particles = [];
+            let deviceType = getDeviceType();
+            const scaleFactor = Math.min(heartCanvas.width, heartCanvas.height) / 1080;
+            const mouse = {
+                x: null,
+                y: null,
+                radius: config.mouse.radius * scaleFactor
+            };
+            
+            window.addEventListener('mousemove', (event) => {
+                mouse.x = event.x;
+                mouse.y = event.y;
+            });
+            
+            window.addEventListener('touchmove', (event) => {
+                event.preventDefault();
+                const touch = event.touches[0];
+                mouse.x = touch.clientX;
+                mouse.y = touch.clientY;
+            }, { passive: false });
+            
+            window.addEventListener('resize', () => {
+                deviceType = getDeviceType();
+                resizeCanvas();
+                init();
+            });
+            
+            function drawBackground() {
+                bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+                const time = Date.now();
+                const waveTime = time * config.background.waveSpeed;
+                const secondaryWaveTime = time * config.background.secondaryWaveSpeed;
+                
+                for (let x = 0; x < backgroundCanvas.width; x += 10) { 
+                    for (let y = 0; y < backgroundCanvas.height; y += 10) {
+                        const dx = (x - backgroundCanvas.width / 2) / backgroundCanvas.width;
+                        const dy = (y - backgroundCanvas.height / 2) / backgroundCanvas.height;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        const wave = Math.sin(distance * 10 + waveTime) * config.background.waveAmplitude;
+                        const secondaryWave = Math.cos(distance * 8 + secondaryWaveTime) * config.background.secondaryWaveAmplitude;
+                        const red = Math.min(255 * config.background.redIntensity * (distance + wave + secondaryWave), 255);
+                        
+                        bgCtx.fillStyle = `rgba(${red}, 0, 0, ${1 - distance * 0.8})`;
+                        bgCtx.fillRect(x, y, 10, 10);
+                    }
+                }
+            }
+            
+            class Particle {
+                constructor(x, y, particleType = 'heart') {
+                    this.x = x;
+                    this.y = y;
+                    this.particleType = particleType;
+                    
+                    let cfg;
+                    if (particleType === 'text') {
+                        cfg = config.text;
+                    } else if (particleType === 'signature') {
+                        cfg = config.signature;
+                    } else {
+                        cfg = config.heart;
+                    }
+                    
+                    this.size = (Math.random() * cfg.particleSizeRange + cfg.particleSizeMin) * scaleFactor;
+                    this.baseX = x;
+                    this.baseY = y;
+                    this.density = (Math.random() * cfg.densityRange) + cfg.densityMin;
+                    
+                    if (particleType === 'signature') {
+                        this.color = `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--signature-color-hue')}, 100%, ${getComputedStyle(document.documentElement).getPropertyValue('--signature-color-lightness')})`;
+                    } else if (particleType === 'text') {
+                        this.color = `hsl(${Math.random() * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--text-particle-color-hue-range')) + parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--text-particle-color-hue-min'))}, 100%, ${getComputedStyle(document.documentElement).getPropertyValue('--text-particle-color-lightness')})`;
+                    } else {
+                        this.color = `hsl(${Math.random() * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--heart-particle-color-hue-range')) + parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--heart-particle-color-hue-min'))}, 100%, ${getComputedStyle(document.documentElement).getPropertyValue('--heart-particle-color-lightness')})`;
+                    }
+                    
+                    this.trembleOffset = Math.random() * Math.PI * 2;
+                    this.trembleSpeed = Math.random() * 0.1 + 0.06;
+                    this.trembleAmplitude = cfg.trembleAmplitude * scaleFactor;
+                    
+                    this.orbitOffset = Math.random() * Math.PI * 2;
+                    this.orbitSpeed = Math.random() * cfg.orbitSpeedRange + cfg.orbitSpeedMin;
+                    this.orbitRadius = cfg.orbitRadius * scaleFactor;
+                }
+                
+                draw() {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+                }
+                
+                update() {
+                    const time = Date.now() * 0.001;
+                    const trembleX = Math.sin(time * this.trembleSpeed + this.trembleOffset) * this.trembleAmplitude;
+                    const trembleY = Math.cos(time * this.trembleSpeed + this.trembleOffset * 1.5) * this.trembleAmplitude;
+                    
+                    const orbitX = Math.sin(time * this.orbitSpeed + this.orbitOffset) * this.orbitRadius;
+                    const orbitY = Math.cos(time * this.orbitSpeed + this.orbitOffset * 1.2) * this.orbitRadius;
+                    
+                    let dx = mouse.x - this.x;
+                    let dy = mouse.y - this.y;
+                    const distance = Math.hypot(dx, dy);
+                    let forceDirectionX = distance > 0 ? dx / distance : 0;
+                    let forceDirectionY = distance > 0 ? dy / distance : 0;
+                    
+                    const maxDistance = mouse.radius;
+                    let force = (maxDistance - distance) / maxDistance;
+                    
+                    if (force < 0) force = 0;
+                    
+                    const targetX = this.baseX + trembleX + orbitX;
+                    const targetY = this.baseY + trembleY + orbitY;
+                    const returnSpeed = this.particleType === 'heart' ? 8 : 6;
+                    const directionX = (targetX - this.x) / returnSpeed;
+                    const directionY = (targetY - this.y) / returnSpeed;
+                    
+                    if (distance < mouse.radius) {
+                        this.x -= forceDirectionX * force * this.density * 2;
+                        this.y -= forceDirectionY * force * this.density * 2;
+                    } else {
+                        this.x += directionX;
+                        this.y += directionY;
+                    }
+                    
+                    this.draw();
+                }
+            }
+            
+            function createTextParticles(textLines, centerY, isSignature = false) {
+                const centerX = heartCanvas.width / 2;
+                const cfg = isSignature ? config.signature : config.text;
+                
+                const fontSize = Math.min(heartCanvas.width, heartCanvas.height) * 
+                    (deviceType === 'mobile' ? cfg.fontSizeMobile : 
+                     deviceType === 'tablet' ? cfg.fontSizeTablet : cfg.fontSizeDesktop);
+                
+                const lineHeight = Math.min(heartCanvas.width, heartCanvas.height) * 
+                    (deviceType === 'mobile' ? (cfg.lineHeightMobile || cfg.fontSizeMobile * 1.3) : 
+                     deviceType === 'tablet' ? (cfg.lineHeightTablet || cfg.fontSizeTablet * 1.3) : 
+                     (cfg.lineHeightDesktop || cfg.fontSizeDesktop * 1.3));
+                
+                ctx.font = `bold ${fontSize}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                const textCanvas = document.createElement('canvas');
+                const textCtx = textCanvas.getContext('2d');
+                textCanvas.width = heartCanvas.width;
+                textCanvas.height = heartCanvas.height;
+                
+                textCtx.font = ctx.font;
+                textCtx.textAlign = 'center';
+                textCtx.textBaseline = 'middle';
+                textCtx.fillStyle = 'white';
+                
+                const totalHeight = textLines.length * lineHeight;
+                const startY = centerY - totalHeight / 2 + lineHeight / 2;
+                
+                textLines.forEach((line, index) => {
+                    const y = startY + index * lineHeight;
+                    textCtx.fillText(line, centerX, y);
+                });
+                
+                const pixelData = textCtx.getImageData(0, 0, heartCanvas.width, heartCanvas.height).data;
+                const step = deviceType === 'mobile' ? cfg.pixelStepMobile : 
+                            deviceType === 'tablet' ? cfg.pixelStepTablet : cfg.pixelStepDesktop;
+                
+                for (let y = 0; y < heartCanvas.height; y += step) {
+                    for (let x = 0; x < heartCanvas.width; x += step) {
+                        const pixelIndex = (Math.floor(y) * heartCanvas.width + Math.floor(x)) * 4;
+                        if (pixelData[pixelIndex + 3] > 128) {
+                            particles.push(new Particle(x, y, isSignature ? 'signature' : 'text'));
+                        }
+                    }
+                }
+            }
+            
+            function init() {
+                particles.length = 0;
+                
+                const centerX = heartCanvas.width / 2;
+                const centerY = heartCanvas.height / 2;
+                const scale = Math.min(heartCanvas.width, heartCanvas.height) * 
+                    (deviceType === 'mobile' ? config.heart.scaleFactorMobile : 
+                     deviceType === 'tablet' ? config.heart.scaleFactorTablet : 
+                     config.heart.scaleFactorDesktop);
+                
+                // Créer le cœur
+                for (let i = 0; i < config.heart.particleCount; i++) {
+                    const t = Math.random() * Math.PI * 2;
+                    const x = 16 * Math.pow(Math.sin(t), 3);
+                    const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+                    
+                    particles.push(new Particle(
+                        centerX + x * scale / 16,
+                        centerY + y * scale / 16,
+                        'heart'
+                    ));
+                }
+                
+                // Texte principal dans le cœur (multi-lignes)
+                const mainText = ["Je t'aime", "mon amour"];
+                createTextParticles(mainText, centerY, false);
+                
+                // Signature en bas
+                const signatureY = heartCanvas.height - (heartCanvas.height * 
+                    (deviceType === 'mobile' ? config.signature.bottomOffsetMobile : 
+                     deviceType === 'tablet' ? config.signature.bottomOffsetTablet : 
+                     config.signature.bottomOffsetDesktop));
+                createTextParticles(["Lord-Coding"], signatureY, true);
+            }
+            
+            function animate() {
+                drawBackground();
+                ctx.clearRect(0, 0, heartCanvas.width, heartCanvas.height);
+                particles.forEach(particle => particle.update());
+                requestAnimationFrame(animate);
+            }
+            
+            init();
+            animate();
+        </script>
+    </body>
+</html>
